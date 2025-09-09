@@ -2,18 +2,24 @@ import mongoose from 'mongoose';
 import logger from './logger';
 
 export const connectDB = async () => {
-  const connectWithRetry = async (retries = 5, delay = 5000) => {
+  // Check if MongoDB URI is provided
+  if (!process.env.MONGODB_URI) {
+    logger.warn('No MongoDB URI provided. Running in standalone mode without database.');
+    return false;
+  }
+
+  const connectWithRetry = async (retries = 3, delay = 3000) => {
     try {
       await mongoose.connect(process.env.MONGODB_URI || '', {
-        connectTimeoutMS: 60000, // Increase connection timeout to 60 seconds
-        serverSelectionTimeoutMS: 60000 // Increase server selection timeout
+        connectTimeoutMS: 10000, // Reduce connection timeout to 10 seconds
+        serverSelectionTimeoutMS: 10000 // Reduce server selection timeout
       });
-      logger.info('MongoDB connected');
+      logger.info('MongoDB connected successfully');
       return true;
     } catch (error) {
       if (retries <= 0) {
-        logger.error('MongoDB connection failed after multiple attempts:', error);
-        process.exit(1);
+        logger.warn('MongoDB connection failed after multiple attempts. Continuing without database:', error);
+        return false;
       }
 
       logger.warn(`MongoDB connection attempt failed. Retrying in ${delay / 1000} seconds... (${retries} attempts remaining)`);
