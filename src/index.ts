@@ -1,7 +1,7 @@
 import dotenv from "dotenv";
 import logger from "./config/logger";
 import { shutdown } from "./services";
-import app from "./app";
+import app, { server } from "./app";
 import { initAgent } from "./Agent/index";
 
 dotenv.config();
@@ -14,8 +14,8 @@ async function startServer() {
     process.exit(1);
   }
 
-  const server = app.listen(process.env.PORT || 3000, () => {
-    logger.info(`Server is running on port ${process.env.PORT || 3000}`);
+  server.listen(process.env.PORT || 3000, () => {
+    logger.info(`Server with Socket.IO is running on port ${process.env.PORT || 3000}`);
   });
 
   process.on("SIGTERM", () => {

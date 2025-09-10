@@ -4,6 +4,8 @@ import dotenv from "dotenv";
 import helmet from "helmet"; // For securing HTTP headers
 import cors from "cors";
 import session from 'express-session';
+import { createServer } from 'http';
+import { Server as SocketIOServer } from 'socket.io';
 
 import logger, { setupErrorHandlers } from "./config/logger";
 import { setup_HandleError } from "./utils";
@@ -18,11 +20,23 @@ setupErrorHandlers();
 // Initialize environment variables
 dotenv.config();
 
-// Initialize Express app
+// Initialize Express app and HTTP server
 const app: Application = express();
+const server = createServer(app);
+
+// Initialize Socket.IO
+const io = new SocketIOServer(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
 
 // Connect to the database
 connectDB();
+
+// Store io instance globally for use in routes
+(global as any).io = io;
 
 // Middleware setup
 app.use(helmet({
@@ -79,10 +93,51 @@ runAgents().catch((error) => {
 });
 */
 
+// Socket.IO connection handling
+io.on('connection', (socket) => {
+  logger.info(`New client connected: ${socket.id}`);
+  
+  // Send initial status to the connected client
+  socket.emit('status', {
+    timestamp: new Date().toISOString(),
+    server: 'online',
+    database: 'online',
+    ai: 'online'
+  });
+  
+  // Handle client requests
+  socket.on('subscribe', (data) => {
+    logger.info(`Client ${socket.id} subscribed to: ${data.channel}`);
+    socket.join(data.channel);
+  });
+  
+  socket.on('unsubscribe', (data) => {
+    logger.info(`Client ${socket.id} unsubscribed from: ${data.channel}`);
+    socket.leave(data.channel);
+  });
+  
+  socket.on('disconnect', () => {
+    logger.info(`Client disconnected: ${socket.id}`);
+  });
+});
+
+// Broadcast system events periodically
+setInterval(() => {
+  io.emit('system-update', {
+    timestamp: new Date().toISOString(),
+    metrics: {
+      uptime: process.uptime(),
+      memory: process.memoryUsage(),
+      connections: io.engine.clientsCount
+    }
+  });
+}, 30000); // Every 30 seconds
+
 // Error handling
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   logger.error('Unhandled error:', err);
   res.status(500).json({ error: 'Internal server error' });
 });
 
+export { server };
 export default app;
